@@ -41,7 +41,7 @@ func s3get(s3conn *s3.S3, path string, offset uint64, size uint64) (*s3.GetObjec
         return nil, &s3error{notFound: true, message: "parsing failed"}
     }
     fmt.Printf("Bucket %s KEY %s offset %d size %d\n", s3url.Host, s3url.Path, offset, size)
-    rrange := fmt.Sprintf("bytes=%d-%d", offset, offset + size)
+    rrange := fmt.Sprintf("bytes=%d-%d", offset, offset + size - 1)
     resp, err := s3conn.GetObject(&s3.GetObjectInput{
         Range: &rrange,
         Bucket: &s3url.Host,

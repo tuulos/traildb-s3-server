@@ -101,6 +101,7 @@ func loadBlock(reqBlock *ExtBlock, loader S3Loader) error {
                                 reqBlock.GetOffset(),
                                 reqBlock.GetSize())
         if err != nil {
+            fmt.Printf("loader failed: %s\n", err.Error())
             return err
         } else {
             reqBlock.SetRealSize(realSize)
@@ -120,7 +121,12 @@ func getBlockFromCache(url string,
                        minSize uint64,
                        loader S3Loader) (BlockResponse, error) {
 
-    reqBlock := NewExtBlock(url, offset, blockSize)
+    reqSize := blockSize
+    if minSize > blockSize {
+        reqSize = minSize
+    }
+    reqBlock := NewExtBlock(url, offset, reqSize)
+
     for i := 0; i < MAX_RETRIES; i++ {
 
         rangeIndicesLock.Lock()
@@ -134,7 +140,8 @@ func getBlockFromCache(url string,
 
         var match augmentedtree.Interval = nil
         for _, block := range rangeIndex.index.Query(reqBlock) {
-            if uint64(block.HighAtDimension(1)) - offset >= minSize {
+            if offset >= uint64(block.LowAtDimension(1)) &&
+               uint64(block.HighAtDimension(1)) - offset >= minSize - 1 {
                 match = block
                 break
             }
@@ -153,7 +160,7 @@ func getBlockFromCache(url string,
                 res := val.(*ExtBlock)
                 path := fmt.Sprintf("%s/%s", res.GetDir(), res.GetKey())
                 respOffset := offset - uint64(res.LowAtDimension(1))
-                respSize := res.GetRealSize() - offset
+                respSize := res.GetRealSize() - respOffset
                 return BlockResponse{path: path,
                                      offset: respOffset,
                                      size: respSize}, nil
