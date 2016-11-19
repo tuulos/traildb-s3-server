@@ -35,7 +35,7 @@ type RangeIndex struct {
 }
 
 var rangeIndicesLock sync.Mutex
-var rangeIndices map[string]RangeIndex
+var rangeIndices map[string]*RangeIndex
 
 /*
 2. Keep track of usage of blocks so we can evict unused blocks.
@@ -125,7 +125,7 @@ func getBlockFromCache(url string,
 		rangeIndicesLock.Lock()
 		rangeIndex, ok := rangeIndices[url]
 		if !ok {
-			rangeIndex = RangeIndex{index: augmentedtree.New(1)}
+			rangeIndex = &RangeIndex{index: augmentedtree.New(1)}
 			rangeIndices[url] = rangeIndex
 		}
 		rangeIndex.lock.Lock()
@@ -203,7 +203,7 @@ func evict(keyIn interface{}, valueIn interface{}) {
 /* initialize the three caches */
 func initCache(maxSize uint64, blockSize0 uint64) {
 	blockSize = blockSize0
-	rangeIndices = make(map[string]RangeIndex)
+	rangeIndices = make(map[string]*RangeIndex)
 	loaderState = make(map[string]*sync.WaitGroup)
 	numBlocks := int((maxSize * 1024 * 1024) / BLOCKSIZE)
 	/* TODO pre-populate cache with entries from disk */
