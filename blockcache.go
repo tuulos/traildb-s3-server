@@ -208,21 +208,24 @@ func getBlockFromCache(
 
 func evict(keyIn interface{}, valueIn interface{}) {
 	key := keyIn.(string)
-	val := valueIn.(*ExtBlock)
-	fmt.Printf("Evict %s\n", key)
-
-	rangeIndicesLock.Lock()
-	rangeIndex, ok := rangeIndices[val.GetPath()]
-	rangeIndicesLock.Unlock()
+	val, ok := valueIn.(*ExtBlock)
 	if ok {
-		rangeIndex.lock.Lock()
-		rangeIndex.index.Delete(val)
-		rangeIndex.lock.Unlock()
-	}
-	del := path.Join(val.GetDir(), val.GetKey())
-	err := os.Remove(del)
-	if err != nil {
-		fmt.Printf("deleting %s failed: %s\n", del, err.Error())
+		rangeIndicesLock.Lock()
+		rangeIndex, ok := rangeIndices[val.GetPath()]
+		rangeIndicesLock.Unlock()
+		if ok {
+			rangeIndex.lock.Lock()
+			rangeIndex.index.Delete(val)
+			rangeIndex.lock.Unlock()
+		}
+		del := path.Join(val.GetDir(), val.GetKey())
+		err := os.Remove(del)
+		if err != nil {
+			fmt.Printf("deleting %s failed: %s\n", del, err.Error())
+		}
+	} else {
+		_, val := valueIn.(string)
+		fmt.Printf("Evict strangeness %s %s \n", key, val)
 	}
 }
 
