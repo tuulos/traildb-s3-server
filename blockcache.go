@@ -86,9 +86,15 @@ func loadBlock(reqBlock *ExtBlock, loader S3Loader) error {
 			return err
 		} else {
 			/* block received successfully, add it to blockCache */
-			reqBlock.SetRealSize(realSize)
-			fmt.Printf("%s added to block cache\n", key)
-			blockCache.Set(key, reqBlock)
+			rangeIndex, ok := rangeIndices[reqBlock.GetPath()]
+			/* !ok = the key got evicted meanwhile */
+			if ok {
+				rangeIndex.lock.Lock()
+				reqBlock.SetRealSize(realSize)
+				rangeIndex.lock.Unlock()
+				fmt.Printf("%s added to block cache\n", key)
+				blockCache.Set(key, reqBlock)
+			}
 		}
 		loaderStateLock.Lock()
 		delete(loaderState, key)
