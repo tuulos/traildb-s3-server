@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -23,8 +24,8 @@ type ExtBlock struct {
 	blockSize uint64
 	realSize  uint64
 	key       string
-	dir       string
 	path      string
+	root      string
 	hash      [16]byte
 }
 
@@ -46,7 +47,6 @@ func (e ExtBlock) ID() uint64 {
 }
 
 func (e *ExtBlock) GetKey() string {
-	//return e.key
 	return hex.EncodeToString(e.hash[:])
 }
 
@@ -63,7 +63,7 @@ func (e *ExtBlock) GetOffset() uint64 {
 }
 
 func (e *ExtBlock) GetDir() string {
-	return hex.EncodeToString(e.hash[:1])
+	return path.Join(e.root, hex.EncodeToString(e.hash[:1]))
 }
 
 func (e *ExtBlock) SetRealSize(size uint64) {
@@ -74,13 +74,14 @@ func (e *ExtBlock) GetRealSize() uint64 {
 	return e.realSize
 }
 
-func NewExtBlock(path string, offset uint64, size uint64) *ExtBlock {
+func NewExtBlock(root string, path string, offset uint64, size uint64) *ExtBlock {
 	keyStr := fmt.Sprintf("%s %d %d", path, offset, size)
 	key := base64.URLEncoding.EncodeToString([]byte(keyStr))
 	return &ExtBlock{key: key,
 		offset:    offset,
 		blockSize: size,
 		path:      path,
+		root:      root,
 		hash:      md5.Sum([]byte(key))}
 }
 

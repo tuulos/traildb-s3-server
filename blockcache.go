@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -86,7 +88,9 @@ func loadBlock(reqBlock *ExtBlock, loader S3Loader) error {
 			return err
 		} else {
 			/* block received successfully, add it to blockCache */
+			rangeIndicesLock.Lock()
 			rangeIndex, ok := rangeIndices[reqBlock.GetPath()]
+			rangeIndicesLock.Unlock()
 			/* !ok = the key got evicted meanwhile */
 			if ok {
 				rangeIndex.lock.Lock()
@@ -107,7 +111,9 @@ func loadBlock(reqBlock *ExtBlock, loader S3Loader) error {
 /*
 main function to request block from the cache or S3
 */
-func getBlockFromCache(url string,
+func getBlockFromCache(
+	root string,
+	url string,
 	offset uint64,
 	minSize uint64,
 	loader S3Loader) (BlockResponse, error) {
@@ -120,7 +126,7 @@ func getBlockFromCache(url string,
 	if minSize > blockSize {
 		reqSize = minSize
 	}
-	reqBlock := NewExtBlock(url, offset, reqSize)
+	reqBlock := NewExtBlock(root, url, offset, reqSize)
 
 	for i := 0; i < MAX_RETRIES; i++ {
 
@@ -169,7 +175,7 @@ func getBlockFromCache(url string,
 				fmt.Printf("Cache hit for %s\n", key)
 				/* the block found in the cache, return the result */
 				res := val.(*ExtBlock)
-				path := fmt.Sprintf("%s/%s", res.GetDir(), res.GetKey())
+				path := path.Join(res.GetDir(), res.GetKey())
 				respOffset := offset - uint64(res.LowAtDimension(1))
 				respSize := res.GetRealSize() - respOffset
 				return BlockResponse{path: path,
@@ -201,9 +207,23 @@ func getBlockFromCache(url string,
 }
 
 func evict(keyIn interface{}, valueIn interface{}) {
-	/* TODO delete the file actually */
 	key := keyIn.(string)
+	val := valueIn.(*ExtBlock)
 	fmt.Printf("Evict %s\n", key)
+
+	rangeIndicesLock.Lock()
+	rangeIndex, ok := rangeIndices[val.GetPath()]
+	rangeIndicesLock.Unlock()
+	if ok {
+		rangeIndex.lock.Lock()
+		rangeIndex.index.Delete(val)
+		rangeIndex.lock.Unlock()
+	}
+	del := path.Join(val.GetDir(), val.GetKey())
+	err := os.Remove(del)
+	if err != nil {
+		fmt.Printf("deleting %s failed: %s\n", del, err.Error())
+	}
 }
 
 /* initialize the three caches */

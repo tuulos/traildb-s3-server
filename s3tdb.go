@@ -36,7 +36,7 @@ const BLOCKSIZE = 16 * 1024 * 1024
 var conf_root string
 
 func (e *s3error) Error() string {
-    return e.message
+	return e.message
 }
 
 func s3get(s3conn *s3.S3, path string, offset uint64, size uint64) (*s3.GetObjectOutput, *s3error) {
@@ -70,16 +70,15 @@ func s3loader(s3conn *s3.S3,
 	offset uint64,
 	maxSize uint64) (uint64, error) {
 
-	root := path.Join(conf_root, dir)
-	err := os.MkdirAll(root, 0755)
+	err := os.MkdirAll(dir, 0755)
 	if err != nil {
 		err = errors.New(fmt.Sprintf("Could not create directory %s: %s",
-			root,
+			dir,
 			err.Error()))
 		return 0, err
 	}
 	/* TODO save to a tmp file, rename */
-	dstPath := path.Join(root, fname)
+	dstPath := path.Join(dir, fname)
 	fmt.Printf("Now downloading %s (offs %d) to %s\n", url, offset, dstPath)
 	dst, err := os.Create(dstPath)
 	if err != nil {
@@ -177,14 +176,18 @@ func getCachedBlock(req extPacket, s3conn *s3.S3, buffer []byte) (extPacket, err
 		maxSize uint64) (uint64, error) {
 		return s3loader(s3conn, buffer, dir, fname, url, offset, maxSize)
 	}
-	resp, err := getBlockFromCache(req.path, req.offset, req.size, loader)
+	resp, err := getBlockFromCache(conf_root,
+		req.path,
+		req.offset,
+		req.size,
+		loader)
 	if err != nil {
 		return extPacket{packetType: "FAIL"}, err
 	} else {
 		return extPacket{packetType: "OKOK",
 			offset: resp.offset,
 			size:   resp.size,
-			path:   path.Join(conf_root, resp.path)}, nil
+			path:   resp.path}, nil
 	}
 }
 
@@ -192,19 +195,19 @@ func handshake(req extPacket, s3conn *s3.S3, buffer []byte) extPacket {
 	if req.path[:5] != "s3://" {
 		return extPacket{packetType: "PROT"}
 	}
-    req.size = 1
-    req.offset = 0
-    _, err := getCachedBlock(req, s3conn, buffer)
-    if err == nil {
+	req.size = 1
+	req.offset = 0
+	_, err := getCachedBlock(req, s3conn, buffer)
+	if err == nil {
 		return extPacket{packetType: "OKOK"}
-    } else {
-        s3err, ok := err.(*s3error)
-        if ok && s3err.notFound {
-		    return extPacket{packetType: "MISS"}
-        } else {
-		    return extPacket{packetType: "FAIL"}
-        }
-    }
+	} else {
+		s3err, ok := err.(*s3error)
+		if ok && s3err.notFound {
+			return extPacket{packetType: "MISS"}
+		} else {
+			return extPacket{packetType: "FAIL"}
+		}
+	}
 }
 
 func handleConnection(conn net.Conn, region string) {
@@ -220,14 +223,14 @@ func handleConnection(conn net.Conn, region string) {
 			if req.packetType == "V000" {
 				err = sendResponse(conn, buf, handshake(req, s3conn, buf))
 			} else if req.packetType == "READ" {
-                resp, _ := getCachedBlock(req, s3conn, buf)
+				resp, _ := getCachedBlock(req, s3conn, buf)
 				err = sendResponse(conn, buf, resp)
 			} else if req.packetType == "EXIT" {
 				err = errors.New("exit")
 			}
 		}
 		if err != nil {
-            fmt.Println("CLOSE!")
+			fmt.Println("CLOSE!")
 			conn.Close()
 			return
 		}
@@ -258,13 +261,16 @@ func main() {
 	region := flag.String("region", "us-west-2", "s3 region")
 	flag.Parse()
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Couldn't get the current working directory: %s\n", err.Error)
-		os.Exit(1)
+	if (*root)[0] == '/' {
+		conf_root = path.Clean(*root)
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Printf("Couldn't get the current working directory: %s\n", err.Error)
+			os.Exit(1)
+		}
+		conf_root = path.Clean(path.Join(cwd, *root))
 	}
-
-	conf_root = path.Clean(path.Join(cwd, *root))
 	fmt.Printf("\ntraildb-s3-server\n\nStarting the server at localhost:%d.\nAt most %dMB of blocks will be cached at %s\n",
 		*port, *maxSize, conf_root)
 
