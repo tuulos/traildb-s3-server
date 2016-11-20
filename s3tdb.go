@@ -31,7 +31,7 @@ type s3error struct {
 
 const TDB_EXT_MAX_PATH_LEN = 1024
 const TDB_EXT_PACKET_HEAD_SIZE = 24
-const BLOCKSIZE = 16 * 1024 * 1024
+const BLOCKSIZE =16 * 1000
 
 var conf_root string
 
@@ -259,6 +259,7 @@ func main() {
 	maxSize := flag.Int("max-size", 1000, "how many MBs to use max")
 	port := flag.Int("port", 9009, "port to listen to")
 	region := flag.String("region", "us-west-2", "s3 region")
+	blockSize := flag.Int("blocksize", BLOCKSIZE, "block size in KB")
 	flag.Parse()
 
 	if (*root)[0] == '/' {
@@ -274,6 +275,6 @@ func main() {
 	fmt.Printf("\ntraildb-s3-server\n\nStarting the server at localhost:%d.\nAt most %dMB of blocks will be cached at %s\n",
 		*port, *maxSize, conf_root)
 
-	initCache(uint64(*maxSize), BLOCKSIZE)
+	initCache(uint64(*maxSize), uint64(*blockSize * 1000))
 	serve(*port, *region)
 }
